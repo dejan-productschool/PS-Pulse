@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createInitiative, listInitiatives } from "@/lib/store";
 import { isStatus } from "@/lib/status";
+import { toIsoDate, parseMilestones } from "@/lib/dates";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -38,10 +39,9 @@ export async function POST(request: Request) {
     driEmail: typeof body.driEmail === "string" ? body.driEmail : "",
     team: typeof body.team === "string" ? body.team : "",
     status: isStatus(body.status) ? body.status : "NOT_STARTED",
-    targetDate:
-      typeof body.targetDate === "string" && body.targetDate
-        ? new Date(body.targetDate).toISOString()
-        : null,
+    startDate: toIsoDate(body.startDate),
+    targetDate: toIsoDate(body.targetDate),
+    milestones: parseMilestones(body.milestones),
     source: "MANUAL",
     initialUpdate:
       typeof body.initialUpdate === "string" ? body.initialUpdate : undefined,

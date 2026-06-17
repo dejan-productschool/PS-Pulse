@@ -11,7 +11,12 @@ export type InitiativeFormValues = {
   driEmail: string;
   team: string;
   status: string;
+  startDate: string; // yyyy-mm-dd or ""
   targetDate: string; // yyyy-mm-dd or ""
+  discoveryEnd: string;
+  devStart: string;
+  qaStart: string;
+  launch: string;
 };
 
 const empty: InitiativeFormValues = {
@@ -21,8 +26,20 @@ const empty: InitiativeFormValues = {
   driEmail: "",
   team: "",
   status: "NOT_STARTED",
+  startDate: "",
   targetDate: "",
+  discoveryEnd: "",
+  devStart: "",
+  qaStart: "",
+  launch: "",
 };
+
+const MILESTONE_FIELDS: { key: keyof InitiativeFormValues; label: string }[] = [
+  { key: "discoveryEnd", label: "Discovery end" },
+  { key: "devStart", label: "Build / dev start" },
+  { key: "qaStart", label: "Test / QA start" },
+  { key: "launch", label: "Launch" },
+];
 
 export function InitiativeForm({
   initialValues,
@@ -57,12 +74,28 @@ export function InitiativeForm({
     }
     setSubmitting(true);
     try {
+      const payload = {
+        name: values.name,
+        summary: values.summary,
+        driName: values.driName,
+        driEmail: values.driEmail,
+        team: values.team,
+        status: values.status,
+        startDate: values.startDate,
+        targetDate: values.targetDate,
+        milestones: {
+          discoveryEnd: values.discoveryEnd,
+          devStart: values.devStart,
+          qaStart: values.qaStart,
+          launch: values.launch,
+        },
+      };
       const res = await fetch(
         isEdit ? `/api/initiatives/${initiativeId}` : "/api/initiatives",
         {
           method: isEdit ? "PATCH" : "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(values),
+          body: JSON.stringify(payload),
         },
       );
       if (!res.ok) {
@@ -146,35 +179,74 @@ export function InitiativeForm({
           />
         </div>
         <div>
-          <label className="label" htmlFor="targetDate">
-            Target date
+          <label className="label" htmlFor="status">
+            Status
           </label>
-          <input
-            id="targetDate"
-            type="date"
+          <select
+            id="status"
             className="input"
-            value={values.targetDate}
-            onChange={(e) => set("targetDate", e.target.value)}
-          />
+            value={values.status}
+            onChange={(e) => set("status", e.target.value)}
+          >
+            {STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {statusLabel(s)}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
-      <div>
-        <label className="label" htmlFor="status">
-          Status
-        </label>
-        <select
-          id="status"
-          className="input"
-          value={values.status}
-          onChange={(e) => set("status", e.target.value)}
-        >
-          {STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {statusLabel(s)}
-            </option>
+      {/* Roadmap timeline */}
+      <div className="space-y-4 border-t border-line pt-5">
+        <div>
+          <h2 className="text-sm font-semibold text-ink">Roadmap timeline</h2>
+          <p className="mt-0.5 text-xs text-ink-soft">
+            Drives the bar and milestone markers on the Roadmap. All optional.
+          </p>
+        </div>
+        <div className="grid gap-5 sm:grid-cols-2">
+          <div>
+            <label className="label" htmlFor="startDate">
+              Start date
+            </label>
+            <input
+              id="startDate"
+              type="date"
+              className="input"
+              value={values.startDate}
+              onChange={(e) => set("startDate", e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="label" htmlFor="targetDate">
+              Target date
+            </label>
+            <input
+              id="targetDate"
+              type="date"
+              className="input"
+              value={values.targetDate}
+              onChange={(e) => set("targetDate", e.target.value)}
+            />
+          </div>
+        </div>
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          {MILESTONE_FIELDS.map(({ key, label }) => (
+            <div key={key}>
+              <label className="label" htmlFor={key}>
+                {label}
+              </label>
+              <input
+                id={key}
+                type="date"
+                className="input"
+                value={values[key]}
+                onChange={(e) => set(key, e.target.value)}
+              />
+            </div>
           ))}
-        </select>
+        </div>
       </div>
 
       {error && (

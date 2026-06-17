@@ -6,6 +6,7 @@ import { Avatar } from "@/components/Avatar";
 import { UpdateForm } from "@/components/UpdateForm";
 import { DeleteInitiativeButton } from "@/components/DeleteInitiativeButton";
 import { formatDate, relativeTime } from "@/lib/format";
+import { MILESTONE_MARKERS } from "@/lib/timeline";
 
 export const dynamic = "force-dynamic";
 
@@ -82,6 +83,7 @@ export default async function InitiativeDetailPage({
                 </span>
               </Field>
               <Field label="Team">{initiative.team || "—"}</Field>
+              <Field label="Start date">{formatDate(initiative.startDate)}</Field>
               <Field label="Target date">{formatDate(initiative.targetDate)}</Field>
               <Field label="Source">
                 {initiative.source === "IMPORTED" ? (
@@ -101,6 +103,32 @@ export default async function InitiativeDetailPage({
               <Field label="Last updated">{relativeTime(initiative.updatedAt)}</Field>
             </dl>
           </div>
+
+          {MILESTONE_MARKERS.some((m) => initiative.milestones[m.key]) && (
+            <div className="card p-5">
+              <h2 className="text-sm font-semibold text-ink">Milestones</h2>
+              <ul className="mt-4 space-y-3">
+                {MILESTONE_MARKERS.map((m) => {
+                  const val = initiative.milestones[m.key];
+                  if (!val) return null;
+                  return (
+                    <li key={m.key} className="flex items-center gap-2.5">
+                      <span
+                        className="h-3 w-1.5 shrink-0 rounded-sm"
+                        style={{ backgroundColor: m.color }}
+                      />
+                      <span className="flex-1 text-sm text-ink-soft">
+                        {m.label}
+                      </span>
+                      <span className="text-sm font-medium text-ink">
+                        {formatDate(val)}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
 
           <UpdateForm
             initiativeId={initiative.id}

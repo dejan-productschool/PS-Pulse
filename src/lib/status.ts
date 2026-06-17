@@ -66,6 +66,20 @@ export const STATUS_META: Record<Status, StatusMeta> = {
   },
 };
 
+// Raw hex values for contexts that need inline styles (e.g. the Gantt bars).
+export const STATUS_HEX: Record<Status, string> = {
+  ON_TRACK: "#12b76a",
+  AT_RISK: "#f79009",
+  OFF_TRACK: "#f04438",
+  NOT_STARTED: "#667085",
+  PAUSED: "#7a5af8",
+  DONE: "#1570ef",
+};
+
+export function statusHex(value: string): string {
+  return isStatus(value) ? STATUS_HEX[value] : STATUS_HEX.NOT_STARTED;
+}
+
 export function isStatus(value: unknown): value is Status {
   return typeof value === "string" && (STATUSES as readonly string[]).includes(value);
 }

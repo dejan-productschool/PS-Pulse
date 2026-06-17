@@ -4,6 +4,7 @@ import { STATUSES, statusMeta, isStatus, type Status } from "@/lib/status";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Avatar } from "@/components/Avatar";
 import { SeedButton } from "@/components/SeedButton";
+import { HealthSummary } from "@/components/HealthSummary";
 import { formatDate, relativeTime } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -62,6 +63,9 @@ export default async function DashboardPage({
           </p>
         </div>
       </div>
+
+      {/* Health summary (Horizon-style) */}
+      <HealthSummary initiatives={all} />
 
       {/* Status summary */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">

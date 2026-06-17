@@ -39,6 +39,8 @@ export default function RootLayout({
               </Link>
               <nav className="flex items-center gap-1">
                 <NavLink href="/" label="Dashboard" />
+                <NavLink href="/roadmap" label="Roadmap" />
+                <NavLink href="/capacity" label="Capacity" />
                 <NavLink href="/connectors" label="Connectors" />
                 <Link href="/initiatives/new" className="btn-primary ml-1">
                   New initiative

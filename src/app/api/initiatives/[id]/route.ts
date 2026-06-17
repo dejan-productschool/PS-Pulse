@@ -6,6 +6,7 @@ import {
   type InitiativePatch,
 } from "@/lib/store";
 import { isStatus } from "@/lib/status";
+import { toIsoDate, parseMilestones } from "@/lib/dates";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -34,10 +35,14 @@ export async function PATCH(request: Request, { params }: Params) {
   if (typeof body.driEmail === "string") patch.driEmail = body.driEmail;
   if (typeof body.team === "string") patch.team = body.team;
   if (isStatus(body.status)) patch.status = body.status;
+  if (typeof body.startDate === "string") {
+    patch.startDate = toIsoDate(body.startDate);
+  }
   if (typeof body.targetDate === "string") {
-    patch.targetDate = body.targetDate
-      ? new Date(body.targetDate).toISOString()
-      : null;
+    patch.targetDate = toIsoDate(body.targetDate);
+  }
+  if (body.milestones && typeof body.milestones === "object") {
+    patch.milestones = parseMilestones(body.milestones);
   }
 
   const updated = await updateInitiative(id, patch);

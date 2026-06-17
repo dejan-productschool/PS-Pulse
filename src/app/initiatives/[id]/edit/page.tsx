@@ -14,9 +14,7 @@ export default async function EditInitiativePage({
   const initiative = await getInitiative(id);
   if (!initiative) notFound();
 
-  const targetDate = initiative.targetDate
-    ? initiative.targetDate.slice(0, 10)
-    : "";
+  const d = (v: string | null) => (v ? v.slice(0, 10) : "");
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -40,7 +38,12 @@ export default async function EditInitiativePage({
           driEmail: initiative.driEmail,
           team: initiative.team,
           status: initiative.status,
-          targetDate,
+          startDate: d(initiative.startDate),
+          targetDate: d(initiative.targetDate),
+          discoveryEnd: d(initiative.milestones.discoveryEnd),
+          devStart: d(initiative.milestones.devStart),
+          qaStart: d(initiative.milestones.qaStart),
+          launch: d(initiative.milestones.launch),
         }}
       />
     </div>

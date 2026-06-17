@@ -1,5 +1,14 @@
 import { Redis } from "@upstash/redis";
-import type { Connector, Initiative, StatusUpdate } from "./types";
+import {
+  EMPTY_MILESTONES,
+  type Allocation,
+  type Connector,
+  type Initiative,
+  type Milestones,
+  type Squad,
+  type SquadMember,
+} from "./types";
+import type { StatusUpdate } from "./types";
 
 /**
  * Low-weight data layer. Uses Upstash Redis (Vercel KV) when credentials are
@@ -108,24 +117,39 @@ export function isPersistent(): boolean {
 
 const INIT_IDS = "pulse:initiative:ids";
 const CONN_IDS = "pulse:connector:ids";
+const SQUAD_IDS = "pulse:squad:ids";
 const initKey = (id: string) => `pulse:initiative:${id}`;
 const connKey = (id: string) => `pulse:connector:${id}`;
+const squadKey = (id: string) => `pulse:squad:${id}`;
 
 const newId = () => crypto.randomUUID();
 const now = () => new Date().toISOString();
 
 // ---- Initiatives ----------------------------------------------------------
 
+// Back-fill fields added after some records may have been created, so older
+// documents in the store never crash newer UI.
+function normalizeInitiative(i: Initiative): Initiative {
+  return {
+    ...i,
+    startDate: i.startDate ?? null,
+    targetDate: i.targetDate ?? null,
+    milestones: { ...EMPTY_MILESTONES, ...(i.milestones ?? {}) },
+  };
+}
+
 export async function listInitiatives(): Promise<Initiative[]> {
   const ids = await kv().smembers(INIT_IDS);
   const docs = await kv().mgetJSON<Initiative>(ids.map(initKey));
   return docs
     .filter((d): d is Initiative => d != null)
+    .map(normalizeInitiative)
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
 export async function getInitiative(id: string): Promise<Initiative | null> {
-  return kv().getJSON<Initiative>(initKey(id));
+  const doc = await kv().getJSON<Initiative>(initKey(id));
+  return doc ? normalizeInitiative(doc) : null;
 }
 
 export type InitiativeInput = {
@@ -135,7 +159,9 @@ export type InitiativeInput = {
   driEmail?: string;
   team?: string;
   status?: string;
+  startDate?: string | null;
   targetDate?: string | null;
+  milestones?: Partial<Milestones>;
   source?: Initiative["source"];
   externalId?: string | null;
   connectorId?: string | null;
@@ -154,7 +180,9 @@ export async function createInitiative(input: InitiativeInput): Promise<Initiati
     driEmail: input.driEmail ?? "",
     team: input.team ?? "",
     status,
+    startDate: input.startDate ?? null,
     targetDate: input.targetDate ?? null,
+    milestones: { ...EMPTY_MILESTONES, ...(input.milestones ?? {}) },
     source: input.source ?? "MANUAL",
     externalId: input.externalId ?? null,
     connectorId: input.connectorId ?? null,
@@ -184,9 +212,10 @@ export type InitiativePatch = Partial<
     | "driEmail"
     | "team"
     | "status"
+    | "startDate"
     | "targetDate"
   >
->;
+> & { milestones?: Partial<Milestones> };
 
 export async function updateInitiative(
   id: string,
@@ -194,7 +223,15 @@ export async function updateInitiative(
 ): Promise<Initiative | null> {
   const existing = await getInitiative(id);
   if (!existing) return null;
-  const updated: Initiative = { ...existing, ...patch, updatedAt: now() };
+  const { milestones, ...rest } = patch;
+  const updated: Initiative = {
+    ...existing,
+    ...rest,
+    milestones: milestones
+      ? { ...existing.milestones, ...milestones }
+      : existing.milestones,
+    updatedAt: now(),
+  };
   await kv().setJSON(initKey(id), updated);
   return updated;
 }
@@ -317,4 +354,139 @@ export async function putInitiative(initiative: Initiative): Promise<void> {
 export async function putConnector(connector: Connector): Promise<void> {
   await kv().setJSON(connKey(connector.id), connector);
   await kv().sadd(CONN_IDS, connector.id);
+}
+
+// ---- Squads / capacity ----------------------------------------------------
+
+function normalizeSquad(s: Squad): Squad {
+  return {
+    ...s,
+    members: s.members ?? [],
+    allocations: s.allocations ?? [],
+  };
+}
+
+export async function listSquads(): Promise<Squad[]> {
+  const ids = await kv().smembers(SQUAD_IDS);
+  const docs = await kv().mgetJSON<Squad>(ids.map(squadKey));
+  return docs
+    .filter((d): d is Squad => d != null)
+    .map(normalizeSquad)
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+}
+
+export async function getSquad(id: string): Promise<Squad | null> {
+  const doc = await kv().getJSON<Squad>(squadKey(id));
+  return doc ? normalizeSquad(doc) : null;
+}
+
+export type SquadInput = {
+  name: string;
+  cycleName?: string;
+  weeks?: number;
+  members?: string[];
+};
+
+export async function createSquad(input: SquadInput): Promise<Squad> {
+  const id = newId();
+  const ts = now();
+  const squad: Squad = {
+    id,
+    name: input.name,
+    cycleName: input.cycleName ?? "Current cycle",
+    weeks: input.weeks && input.weeks > 0 ? input.weeks : 13,
+    members: (input.members ?? []).map((name) => ({ id: newId(), name })),
+    allocations: [],
+    createdAt: ts,
+    updatedAt: ts,
+  };
+  await kv().setJSON(squadKey(id), squad);
+  await kv().sadd(SQUAD_IDS, id);
+  return squad;
+}
+
+export async function updateSquad(
+  id: string,
+  patch: Partial<Pick<Squad, "name" | "cycleName" | "weeks" | "members" | "allocations">>,
+): Promise<Squad | null> {
+  const existing = await getSquad(id);
+  if (!existing) return null;
+  const updated: Squad = { ...existing, ...patch, updatedAt: now() };
+  await kv().setJSON(squadKey(id), updated);
+  return updated;
+}
+
+export async function deleteSquad(id: string): Promise<boolean> {
+  const existing = await getSquad(id);
+  if (!existing) return false;
+  await kv().del(squadKey(id));
+  await kv().srem(SQUAD_IDS, id);
+  return true;
+}
+
+export async function addAllocation(
+  squadId: string,
+  alloc: { initiativeId: string | null; label: string; personWeeks: number },
+): Promise<Allocation | null> {
+  const squad = await getSquad(squadId);
+  if (!squad) return null;
+  const entry: Allocation = {
+    id: newId(),
+    initiativeId: alloc.initiativeId,
+    label: alloc.label,
+    personWeeks: alloc.personWeeks,
+  };
+  squad.allocations = [...squad.allocations, entry];
+  squad.updatedAt = now();
+  await kv().setJSON(squadKey(squadId), squad);
+  return entry;
+}
+
+export async function removeAllocation(
+  squadId: string,
+  allocId: string,
+): Promise<boolean> {
+  const squad = await getSquad(squadId);
+  if (!squad) return false;
+  const before = squad.allocations.length;
+  squad.allocations = squad.allocations.filter((a) => a.id !== allocId);
+  if (squad.allocations.length === before) return false;
+  squad.updatedAt = now();
+  await kv().setJSON(squadKey(squadId), squad);
+  return true;
+}
+
+export async function addSquadMember(
+  squadId: string,
+  name: string,
+): Promise<SquadMember | null> {
+  const squad = await getSquad(squadId);
+  if (!squad) return null;
+  const member: SquadMember = { id: newId(), name };
+  squad.members = [...squad.members, member];
+  squad.updatedAt = now();
+  await kv().setJSON(squadKey(squadId), squad);
+  return member;
+}
+
+export async function removeSquadMember(
+  squadId: string,
+  memberId: string,
+): Promise<boolean> {
+  const squad = await getSquad(squadId);
+  if (!squad) return false;
+  squad.members = squad.members.filter((m) => m.id !== memberId);
+  squad.updatedAt = now();
+  await kv().setJSON(squadKey(squadId), squad);
+  return true;
+}
+
+export async function countSquads(): Promise<number> {
+  const ids = await kv().smembers(SQUAD_IDS);
+  return ids.length;
+}
+
+export async function putSquad(squad: Squad): Promise<void> {
+  await kv().setJSON(squadKey(squad.id), squad);
+  await kv().sadd(SQUAD_IDS, squad.id);
 }

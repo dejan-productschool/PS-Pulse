@@ -11,17 +11,22 @@ via configurable connectors (the generic replacement for a Jira-only integration
 
 - **Next.js (App Router) + TypeScript**
 - **Tailwind CSS** — custom neutral design system
-- **Prisma + SQLite** — zero-config local persistence
+- **Prisma + Postgres** — works locally and on serverless hosts
 - No auth (single shared workspace)
 
 ## Getting started
 
-Requires Node 18+ (developed on Node 22).
+Requires Node 18+ (developed on Node 22) and a Postgres database. For local
+development you can use a free [Neon](https://neon.tech) database, a local
+Postgres, or Docker.
 
 ```bash
 npm install
 
-# Create the SQLite database, run migrations, and load demo data
+# Point DATABASE_URL at your Postgres instance
+cp .env.example .env   # then edit DATABASE_URL
+
+# Create the schema and load demo data
 npm run setup
 
 # Start the dev server
@@ -30,8 +35,25 @@ npm run dev
 
 Then open http://localhost:3000.
 
-`npm run setup` runs `prisma migrate dev` and seeds the database. To re-seed at any
-time: `npm run db:seed`. The SQLite file lives at `prisma/dev.db`.
+`npm run setup` runs `prisma db push` (creates the tables) and seeds demo data.
+To re-seed at any time: `npm run db:seed`.
+
+## Deploying to production (Vercel)
+
+1. Provision a Postgres database (Vercel Storage → Neon is one click, or any
+   Postgres provider).
+2. In the Vercel project, set the `DATABASE_URL` environment variable.
+3. Deploy. The build runs `prisma generate && next build`; `postinstall` also
+   generates the Prisma client.
+4. Create the schema and seed once against the production database:
+
+   ```bash
+   DATABASE_URL="<prod-url>" npx prisma db push
+   DATABASE_URL="<prod-url>" SEED_APP_URL="https://<your-app>.vercel.app" npm run db:seed
+   ```
+
+   `SEED_APP_URL` lets the bundled demo connector reach its mock source on the
+   deployed origin.
 
 ## What's included
 

@@ -30,10 +30,14 @@ async function main() {
   await prisma.initiative.deleteMany();
   await prisma.connector.deleteMany();
 
+  // In production, set SEED_APP_URL to the deployed origin so the demo
+  // connector can reach its bundled mock source over the network.
+  const appUrl = process.env.SEED_APP_URL || "http://localhost:3000";
+
   await prisma.connector.create({
     data: {
       name: "Demo source (mock API)",
-      baseUrl: "http://localhost:3000",
+      baseUrl: appUrl,
       endpoint: "api/mock-source",
       authHeader: "",
       fieldMapping: JSON.stringify(demoMapping, null, 2),

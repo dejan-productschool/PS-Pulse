@@ -1,13 +1,13 @@
 // Pulse Lite data model.
-// Note: SQLite does not support Prisma enums, so status/source are stored as
-// strings and constrained in application code (see src/lib/status.ts).
+// Note: status/source are stored as strings and constrained in application
+// code (see src/lib/status.ts) so the model stays portable across databases.
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 

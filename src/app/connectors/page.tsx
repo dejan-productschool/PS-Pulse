@@ -1,13 +1,13 @@
-import { prisma } from "@/lib/db";
+import { listConnectors, listInitiatives } from "@/lib/store";
 import { ConnectorManager, type ConnectorView } from "@/components/ConnectorManager";
 
 export const dynamic = "force-dynamic";
 
 export default async function ConnectorsPage() {
-  const connectors = await prisma.connector.findMany({
-    orderBy: { createdAt: "desc" },
-    include: { _count: { select: { initiatives: true } } },
-  });
+  const [connectors, initiatives] = await Promise.all([
+    listConnectors(),
+    listInitiatives(),
+  ]);
 
   const views: ConnectorView[] = connectors.map((c) => ({
     id: c.id,
@@ -16,8 +16,8 @@ export default async function ConnectorsPage() {
     endpoint: c.endpoint,
     authHeader: c.authHeader,
     fieldMapping: c.fieldMapping,
-    lastSyncedAt: c.lastSyncedAt ? c.lastSyncedAt.toISOString() : null,
-    initiativeCount: c._count.initiatives,
+    lastSyncedAt: c.lastSyncedAt,
+    initiativeCount: initiatives.filter((i) => i.connectorId === c.id).length,
   }));
 
   return (

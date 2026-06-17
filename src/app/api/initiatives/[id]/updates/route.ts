@@ -1,16 +1,16 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import { addStatusUpdate, getInitiative } from "@/lib/store";
 import { isStatus } from "@/lib/status";
 
 type Params = { params: Promise<{ id: string }> };
 
 export async function GET(_request: Request, { params }: Params) {
   const { id } = await params;
-  const updates = await prisma.statusUpdate.findMany({
-    where: { initiativeId: id },
-    orderBy: { createdAt: "desc" },
-  });
-  return NextResponse.json(updates);
+  const initiative = await getInitiative(id);
+  if (!initiative) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  return NextResponse.json(initiative.updates);
 }
 
 export async function POST(request: Request, { params }: Params) {
@@ -27,25 +27,17 @@ export async function POST(request: Request, { params }: Params) {
     return NextResponse.json({ error: "Update text is required" }, { status: 400 });
   }
 
-  const initiative = await prisma.initiative.findUnique({ where: { id } });
+  const initiative = await getInitiative(id);
   if (!initiative) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
   const status = isStatus(body.status) ? body.status : initiative.status;
-
-  // Posting an update advances the initiative's current status to the snapshot.
-  const [update] = await prisma.$transaction([
-    prisma.statusUpdate.create({
-      data: {
-        initiativeId: id,
-        status,
-        body: text,
-        author: typeof body.author === "string" ? body.author : "",
-      },
-    }),
-    prisma.initiative.update({ where: { id }, data: { status } }),
-  ]);
+  const update = await addStatusUpdate(id, {
+    status,
+    body: text,
+    author: typeof body.author === "string" ? body.author : "",
+  });
 
   return NextResponse.json(update, { status: 201 });
 }

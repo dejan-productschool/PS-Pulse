@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { prisma } from "@/lib/db";
+import { getConnector, getInitiative } from "@/lib/store";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Avatar } from "@/components/Avatar";
 import { UpdateForm } from "@/components/UpdateForm";
@@ -26,14 +26,12 @@ export default async function InitiativeDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const initiative = await prisma.initiative.findUnique({
-    where: { id },
-    include: {
-      updates: { orderBy: { createdAt: "desc" } },
-      connector: true,
-    },
-  });
+  const initiative = await getInitiative(id);
   if (!initiative) notFound();
+
+  const connector = initiative.connectorId
+    ? await getConnector(initiative.connectorId)
+    : null;
 
   return (
     <div className="space-y-6">
@@ -89,10 +87,10 @@ export default async function InitiativeDetailPage({
                 {initiative.source === "IMPORTED" ? (
                   <span>
                     Imported
-                    {initiative.connector && (
+                    {connector && (
                       <span className="text-ink-faint">
                         {" "}
-                        · {initiative.connector.name}
+                        · {connector.name}
                       </span>
                     )}
                   </span>

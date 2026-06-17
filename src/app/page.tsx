@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { prisma } from "@/lib/db";
+import { listInitiatives } from "@/lib/store";
 import { STATUSES, statusMeta, isStatus, type Status } from "@/lib/status";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Avatar } from "@/components/Avatar";
+import { SeedButton } from "@/components/SeedButton";
 import { formatDate, relativeTime } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -30,17 +31,12 @@ export default async function DashboardPage({
   const activeStatus = sp.status && isStatus(sp.status) ? sp.status : undefined;
   const activeTeam = sp.team || undefined;
 
-  const [all, initiatives] = await Promise.all([
-    prisma.initiative.findMany({ select: { status: true, team: true } }),
-    prisma.initiative.findMany({
-      where: {
-        ...(activeStatus ? { status: activeStatus } : {}),
-        ...(activeTeam ? { team: activeTeam } : {}),
-      },
-      orderBy: { updatedAt: "desc" },
-      include: { updates: { orderBy: { createdAt: "desc" }, take: 1 } },
-    }),
-  ]);
+  const all = await listInitiatives();
+  const initiatives = all.filter(
+    (i) =>
+      (!activeStatus || i.status === activeStatus) &&
+      (!activeTeam || i.team === activeTeam),
+  );
 
   const counts = STATUSES.reduce<Record<Status, number>>(
     (acc, s) => {
@@ -132,9 +128,12 @@ export default async function DashboardPage({
               ? "No initiatives yet."
               : "No initiatives match these filters."}
           </p>
-          <Link href="/initiatives/new" className="btn-primary">
-            New initiative
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link href="/initiatives/new" className="btn-primary">
+              New initiative
+            </Link>
+            {all.length === 0 && <SeedButton />}
+          </div>
         </div>
       ) : (
         <div className="card divide-y divide-line overflow-hidden">

@@ -1,18 +1,17 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import {
+  deleteInitiative,
+  getInitiative,
+  updateInitiative,
+  type InitiativePatch,
+} from "@/lib/store";
 import { isStatus } from "@/lib/status";
 
 type Params = { params: Promise<{ id: string }> };
 
 export async function GET(_request: Request, { params }: Params) {
   const { id } = await params;
-  const initiative = await prisma.initiative.findUnique({
-    where: { id },
-    include: {
-      updates: { orderBy: { createdAt: "desc" } },
-      connector: true,
-    },
-  });
+  const initiative = await getInitiative(id);
   if (!initiative) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
@@ -28,31 +27,31 @@ export async function PATCH(request: Request, { params }: Params) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const data: Record<string, unknown> = {};
-  if (typeof body.name === "string") data.name = body.name.trim();
-  if (typeof body.summary === "string") data.summary = body.summary;
-  if (typeof body.driName === "string") data.driName = body.driName;
-  if (typeof body.driEmail === "string") data.driEmail = body.driEmail;
-  if (typeof body.team === "string") data.team = body.team;
-  if (isStatus(body.status)) data.status = body.status;
+  const patch: InitiativePatch = {};
+  if (typeof body.name === "string") patch.name = body.name.trim();
+  if (typeof body.summary === "string") patch.summary = body.summary;
+  if (typeof body.driName === "string") patch.driName = body.driName;
+  if (typeof body.driEmail === "string") patch.driEmail = body.driEmail;
+  if (typeof body.team === "string") patch.team = body.team;
+  if (isStatus(body.status)) patch.status = body.status;
   if (typeof body.targetDate === "string") {
-    data.targetDate = body.targetDate ? new Date(body.targetDate) : null;
+    patch.targetDate = body.targetDate
+      ? new Date(body.targetDate).toISOString()
+      : null;
   }
 
-  try {
-    const initiative = await prisma.initiative.update({ where: { id }, data });
-    return NextResponse.json(initiative);
-  } catch {
+  const updated = await updateInitiative(id, patch);
+  if (!updated) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
+  return NextResponse.json(updated);
 }
 
 export async function DELETE(_request: Request, { params }: Params) {
   const { id } = await params;
-  try {
-    await prisma.initiative.delete({ where: { id } });
-    return NextResponse.json({ ok: true });
-  } catch {
+  const ok = await deleteInitiative(id);
+  if (!ok) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
+  return NextResponse.json({ ok: true });
 }

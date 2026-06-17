@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import { createInitiative, listInitiatives } from "@/lib/store";
 import { isStatus } from "@/lib/status";
 
 export async function GET(request: Request) {
@@ -7,14 +7,13 @@ export async function GET(request: Request) {
   const status = searchParams.get("status");
   const team = searchParams.get("team");
 
-  const initiatives = await prisma.initiative.findMany({
-    where: {
-      ...(status && isStatus(status) ? { status } : {}),
-      ...(team ? { team } : {}),
-    },
-    orderBy: { updatedAt: "desc" },
-    include: { updates: { orderBy: { createdAt: "desc" }, take: 1 } },
-  });
+  let initiatives = await listInitiatives();
+  if (status && isStatus(status)) {
+    initiatives = initiatives.filter((i) => i.status === status);
+  }
+  if (team) {
+    initiatives = initiatives.filter((i) => i.team === team);
+  }
 
   return NextResponse.json(initiatives);
 }
@@ -32,33 +31,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Name is required" }, { status: 400 });
   }
 
-  const status = isStatus(body.status) ? body.status : "NOT_STARTED";
-
-  const initiative = await prisma.initiative.create({
-    data: {
-      name,
-      summary: typeof body.summary === "string" ? body.summary : "",
-      driName: typeof body.driName === "string" ? body.driName : "",
-      driEmail: typeof body.driEmail === "string" ? body.driEmail : "",
-      team: typeof body.team === "string" ? body.team : "",
-      status,
-      targetDate:
-        typeof body.targetDate === "string" && body.targetDate
-          ? new Date(body.targetDate)
-          : null,
-      source: "MANUAL",
-      // Seed the timeline with the initial status so history is complete.
-      updates: {
-        create: {
-          status,
-          body:
-            typeof body.initialUpdate === "string" && body.initialUpdate.trim()
-              ? body.initialUpdate.trim()
-              : "Initiative created.",
-          author: typeof body.driName === "string" ? body.driName : "",
-        },
-      },
-    },
+  const initiative = await createInitiative({
+    name,
+    summary: typeof body.summary === "string" ? body.summary : "",
+    driName: typeof body.driName === "string" ? body.driName : "",
+    driEmail: typeof body.driEmail === "string" ? body.driEmail : "",
+    team: typeof body.team === "string" ? body.team : "",
+    status: isStatus(body.status) ? body.status : "NOT_STARTED",
+    targetDate:
+      typeof body.targetDate === "string" && body.targetDate
+        ? new Date(body.targetDate).toISOString()
+        : null,
+    source: "MANUAL",
+    initialUpdate:
+      typeof body.initialUpdate === "string" ? body.initialUpdate : undefined,
   });
 
   return NextResponse.json(initiative, { status: 201 });

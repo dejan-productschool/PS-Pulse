@@ -11,49 +11,46 @@ via configurable connectors (the generic replacement for a Jira-only integration
 
 - **Next.js (App Router) + TypeScript**
 - **Tailwind CSS** — custom neutral design system
-- **Prisma + Postgres** — works locally and on serverless hosts
+- **Upstash Redis (Vercel KV)** — schema-less, low-weight, write-capable
 - No auth (single shared workspace)
+
+Data is stored as JSON documents in Redis (one per initiative/connector). There
+are no migrations. If no KV credentials are configured, Pulse automatically uses
+a process-local **in-memory** store so it still runs and builds — handy for local
+development, though that data is not persisted across restarts.
 
 ## Getting started
 
-Requires Node 18+ (developed on Node 22) and a Postgres database. For local
-development you can use a free [Neon](https://neon.tech) database, a local
-Postgres, or Docker.
+Requires Node 18+ (developed on Node 22).
 
 ```bash
 npm install
 
-# Point DATABASE_URL at your Postgres instance
-cp .env.example .env   # then edit DATABASE_URL
+# Optional: add Upstash/Vercel KV credentials to persist locally.
+# Leave them empty to use the in-memory fallback.
+cp .env.example .env
 
-# Create the schema and load demo data
-npm run setup
-
-# Start the dev server
 npm run dev
 ```
 
-Then open http://localhost:3000.
-
-`npm run setup` runs `prisma db push` (creates the tables) and seeds demo data.
-To re-seed at any time: `npm run db:seed`.
+Then open http://localhost:3000 and click **Load demo data** on the empty
+dashboard (or `POST /api/seed`).
 
 ## Deploying to production (Vercel)
 
-1. Provision a Postgres database (Vercel Storage → Neon is one click, or any
-   Postgres provider).
-2. In the Vercel project, set the `DATABASE_URL` environment variable.
-3. Deploy. The build runs `prisma generate && next build`; `postinstall` also
-   generates the Prisma client.
-4. Create the schema and seed once against the production database:
+1. Import the repo into Vercel (framework preset: Next.js).
+2. Add the **Upstash Redis** integration from the Vercel Marketplace
+   (Project → Storage → Create Database → Upstash Redis). This injects
+   `KV_REST_API_URL` and `KV_REST_API_TOKEN` automatically.
+3. Deploy (build is a plain `next build`; no DB env required to build).
+4. Seed demo data once (idempotent — only seeds if the store is empty):
 
    ```bash
-   DATABASE_URL="<prod-url>" npx prisma db push
-   DATABASE_URL="<prod-url>" SEED_APP_URL="https://<your-app>.vercel.app" npm run db:seed
+   curl -X POST https://<your-app>.vercel.app/api/seed
    ```
 
-   `SEED_APP_URL` lets the bundled demo connector reach its mock source on the
-   deployed origin.
+   The seed derives the demo connector's base URL from the request origin, so
+   its bundled mock source works on the deployed domain.
 
 ## What's included
 
@@ -67,10 +64,12 @@ To re-seed at any time: `npm run db:seed`.
 
 ## Data model
 
-| Model          | Purpose                                                            |
+Stored as JSON documents in Redis (see [src/lib/types.ts](src/lib/types.ts) and
+[src/lib/store.ts](src/lib/store.ts)):
+
+| Document       | Purpose                                                            |
 | -------------- | ------------------------------------------------------------------ |
-| `Initiative`   | The thing being tracked: name, summary, DRI, team, status, target. |
-| `StatusUpdate` | An entry in an initiative's rolling status history.                |
+| `Initiative`   | The thing being tracked: name, summary, DRI, team, status, target. Embeds its `StatusUpdate[]` history. |
 | `Connector`    | A saved external REST source + field mapping for ingestion.        |
 
 Statuses: `ON_TRACK`, `AT_RISK`, `OFF_TRACK`, `NOT_STARTED`, `PAUSED`, `DONE`.
@@ -114,7 +113,7 @@ search response):
 
 ### Try it
 
-The seed creates a **"Demo source (mock API)"** connector pointing at the bundled
+Seeding creates a **"Demo source (mock API)"** connector pointing at the bundled
 `/api/mock-source` endpoint. Go to **Connectors → Sync now** to import sample
 initiatives end-to-end.
 
@@ -145,4 +144,5 @@ curl -X POST http://localhost:3000/api/import \
 | `DELETE`             | `/api/connectors/:id`             | Delete a connector                |
 | `POST`               | `/api/connectors/:id/sync`        | Fetch + ingest from the source    |
 | `POST`               | `/api/import`                     | Direct import (with/without map)  |
+| `POST`               | `/api/seed`                       | Seed demo data (idempotent)       |
 | `GET`                | `/api/mock-source`                | Bundled demo external API         |

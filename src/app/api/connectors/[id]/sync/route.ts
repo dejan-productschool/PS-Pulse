@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
 import {
   extractRecords,
   mapRecord,
   parseFieldMapping,
 } from "@/lib/connectors";
 import { ingestInitiatives } from "@/lib/ingest";
+import { getConnector, touchConnectorSynced } from "@/lib/store";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -16,7 +16,7 @@ function joinUrl(baseUrl: string, endpoint: string): string {
 
 export async function POST(_request: Request, { params }: Params) {
   const { id } = await params;
-  const connector = await prisma.connector.findUnique({ where: { id } });
+  const connector = await getConnector(id);
   if (!connector) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
@@ -54,10 +54,7 @@ export async function POST(_request: Request, { params }: Params) {
   const records = extractRecords(payload, mapping).map((r) => mapRecord(r, mapping));
   const result = await ingestInitiatives(records, connector.id);
 
-  await prisma.connector.update({
-    where: { id },
-    data: { lastSyncedAt: new Date() },
-  });
+  await touchConnectorSynced(id);
 
   return NextResponse.json({ source: url, ...result });
 }

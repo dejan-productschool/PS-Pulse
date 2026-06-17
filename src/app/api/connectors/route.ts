@@ -1,12 +1,16 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import { createConnector, listConnectors, listInitiatives } from "@/lib/store";
 
 export async function GET() {
-  const connectors = await prisma.connector.findMany({
-    orderBy: { createdAt: "desc" },
-    include: { _count: { select: { initiatives: true } } },
-  });
-  return NextResponse.json(connectors);
+  const [connectors, initiatives] = await Promise.all([
+    listConnectors(),
+    listInitiatives(),
+  ]);
+  const withCounts = connectors.map((c) => ({
+    ...c,
+    initiativeCount: initiatives.filter((i) => i.connectorId === c.id).length,
+  }));
+  return NextResponse.json(withCounts);
 }
 
 export async function POST(request: Request) {
@@ -26,7 +30,6 @@ export async function POST(request: Request) {
     );
   }
 
-  // Validate the field mapping is parseable JSON before storing.
   let fieldMapping = "{}";
   if (typeof body.fieldMapping === "string" && body.fieldMapping.trim()) {
     try {
@@ -40,14 +43,12 @@ export async function POST(request: Request) {
     }
   }
 
-  const connector = await prisma.connector.create({
-    data: {
-      name,
-      baseUrl,
-      endpoint: typeof body.endpoint === "string" ? body.endpoint : "",
-      authHeader: typeof body.authHeader === "string" ? body.authHeader : "",
-      fieldMapping,
-    },
+  const connector = await createConnector({
+    name,
+    baseUrl,
+    endpoint: typeof body.endpoint === "string" ? body.endpoint : "",
+    authHeader: typeof body.authHeader === "string" ? body.authHeader : "",
+    fieldMapping,
   });
 
   return NextResponse.json(connector, { status: 201 });

@@ -19,10 +19,6 @@ npm-debug.log*
 .env
 .env*.local
 
-# database
-/prisma/*.db
-/prisma/*.db-journal
-
 # typescript
 next-env.d.ts
 *.tsbuildinfo

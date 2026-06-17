@@ -1,5 +1,10 @@
-import { prisma } from "./db";
 import type { MappedInitiative } from "./connectors";
+import {
+  addStatusUpdate,
+  createInitiative,
+  findByExternal,
+  updateInitiative,
+} from "./store";
 
 export type IngestResult = {
   created: number;
@@ -13,7 +18,7 @@ export type IngestResult = {
  * Upsert a batch of mapped initiatives. Records with both a connectorId and an
  * externalId are matched on that pair so re-syncs update in place; everything
  * else is created fresh. A status update is appended whenever an imported
- * record's status differs from what we already have (or on first import).
+ * record's status differs from what we already have.
  */
 export async function ingestInitiatives(
   records: MappedInitiative[],
@@ -31,63 +36,40 @@ export async function ingestInitiatives(
     try {
       const existing =
         connectorId && record.externalId
-          ? await prisma.initiative.findUnique({
-              where: {
-                connectorId_externalId: {
-                  connectorId,
-                  externalId: record.externalId,
-                },
-              },
-            })
+          ? await findByExternal(connectorId, record.externalId)
           : null;
 
       if (existing) {
         const statusChanged = existing.status !== record.status;
-        await prisma.initiative.update({
-          where: { id: existing.id },
-          data: {
-            name: record.name,
-            summary: record.summary,
-            driName: record.driName,
-            driEmail: record.driEmail,
-            team: record.team,
-            status: record.status,
-            targetDate: record.targetDate,
-            ...(statusChanged
-              ? {
-                  updates: {
-                    create: {
-                      status: record.status,
-                      body: "Status updated via connector sync.",
-                      author: "Connector",
-                    },
-                  },
-                }
-              : {}),
-          },
+        await updateInitiative(existing.id, {
+          name: record.name,
+          summary: record.summary,
+          driName: record.driName,
+          driEmail: record.driEmail,
+          team: record.team,
+          targetDate: record.targetDate ? record.targetDate.toISOString() : null,
         });
+        if (statusChanged) {
+          await addStatusUpdate(existing.id, {
+            status: record.status,
+            body: "Status updated via connector sync.",
+            author: "Connector",
+          });
+        }
         result.updated += 1;
       } else {
-        await prisma.initiative.create({
-          data: {
-            name: record.name,
-            summary: record.summary,
-            driName: record.driName,
-            driEmail: record.driEmail,
-            team: record.team,
-            status: record.status,
-            targetDate: record.targetDate,
-            source: "IMPORTED",
-            connectorId: connectorId ?? undefined,
-            externalId: record.externalId ?? undefined,
-            updates: {
-              create: {
-                status: record.status,
-                body: "Imported via connector.",
-                author: "Connector",
-              },
-            },
-          },
+        await createInitiative({
+          name: record.name,
+          summary: record.summary,
+          driName: record.driName,
+          driEmail: record.driEmail,
+          team: record.team,
+          status: record.status,
+          targetDate: record.targetDate ? record.targetDate.toISOString() : null,
+          source: "IMPORTED",
+          connectorId: connectorId ?? null,
+          externalId: record.externalId ?? null,
+          initialUpdate: "Imported via connector.",
         });
         result.created += 1;
       }

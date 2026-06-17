@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { prisma } from "@/lib/db";
+import { getInitiative } from "@/lib/store";
 import { InitiativeForm } from "@/components/InitiativeForm";
 
 export const dynamic = "force-dynamic";
@@ -11,11 +11,11 @@ export default async function EditInitiativePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const initiative = await prisma.initiative.findUnique({ where: { id } });
+  const initiative = await getInitiative(id);
   if (!initiative) notFound();
 
   const targetDate = initiative.targetDate
-    ? initiative.targetDate.toISOString().slice(0, 10)
+    ? initiative.targetDate.slice(0, 10)
     : "";
 
   return (

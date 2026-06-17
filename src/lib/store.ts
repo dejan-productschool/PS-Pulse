@@ -490,3 +490,20 @@ export async function putSquad(squad: Squad): Promise<void> {
   await kv().setJSON(squadKey(squad.id), squad);
   await kv().sadd(SQUAD_IDS, squad.id);
 }
+
+// Wipe all Pulse data (used by the force-reseed demo flow).
+export async function resetAll(): Promise<void> {
+  const [initIds, connIds, squadIds] = await Promise.all([
+    kv().smembers(INIT_IDS),
+    kv().smembers(CONN_IDS),
+    kv().smembers(SQUAD_IDS),
+  ]);
+  await Promise.all([
+    ...initIds.map((id) => kv().del(initKey(id))),
+    ...connIds.map((id) => kv().del(connKey(id))),
+    ...squadIds.map((id) => kv().del(squadKey(id))),
+  ]);
+  for (const id of initIds) await kv().srem(INIT_IDS, id);
+  for (const id of connIds) await kv().srem(CONN_IDS, id);
+  for (const id of squadIds) await kv().srem(SQUAD_IDS, id);
+}

@@ -7,6 +7,7 @@ import {
   putConnector,
   putInitiative,
   putSquad,
+  resetAll,
 } from "@/lib/store";
 
 /**
@@ -14,13 +15,18 @@ import {
  * when the store is empty, so it is safe to call after deploying.
  */
 export async function POST(request: Request) {
+  const force = new URL(request.url).searchParams.get("force") === "1";
+  if (force) {
+    await resetAll();
+  }
+
   const [initiativeCount, connectorCount, squadCount] = await Promise.all([
     countInitiatives(),
     countConnectors(),
     countSquads(),
   ]);
 
-  if (initiativeCount > 0 || connectorCount > 0 || squadCount > 0) {
+  if (!force && (initiativeCount > 0 || connectorCount > 0 || squadCount > 0)) {
     return NextResponse.json({
       seeded: false,
       message: "Store already has data; nothing to seed.",

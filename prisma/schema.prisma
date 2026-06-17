@@ -1,0 +1,63 @@
+// Pulse Lite data model.
+// Note: SQLite does not support Prisma enums, so status/source are stored as
+// strings and constrained in application code (see src/lib/status.ts).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Initiative {
+  id          String   @id @default(cuid())
+  name        String
+  summary     String   @default("")
+  driName     String   @default("")
+  driEmail    String   @default("")
+  team        String   @default("")
+  // ON_TRACK | AT_RISK | OFF_TRACK | NOT_STARTED | PAUSED | DONE
+  status      String   @default("NOT_STARTED")
+  targetDate  DateTime?
+  // MANUAL | IMPORTED
+  source      String   @default("MANUAL")
+  externalId  String?
+  connectorId String?
+  connector   Connector? @relation(fields: [connectorId], references: [id], onDelete: SetNull)
+  updates     StatusUpdate[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([connectorId, externalId])
+  @@index([status])
+}
+
+model StatusUpdate {
+  id           String     @id @default(cuid())
+  initiativeId String
+  initiative   Initiative @relation(fields: [initiativeId], references: [id], onDelete: Cascade)
+  // Snapshot of the status at the time of the update.
+  status       String
+  body         String
+  author       String     @default("")
+  createdAt    DateTime   @default(now())
+
+  @@index([initiativeId])
+}
+
+model Connector {
+  id           String       @id @default(cuid())
+  name         String
+  baseUrl      String
+  endpoint     String       @default("")
+  // Optional raw header value sent as "Authorization".
+  authHeader   String       @default("")
+  // JSON string mapping external fields -> Pulse fields.
+  fieldMapping String       @default("{}")
+  lastSyncedAt DateTime?
+  initiatives  Initiative[]
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+}
